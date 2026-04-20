@@ -1,6 +1,10 @@
 <template>
   <div class="min-h-screen bg-slate-100 font-sans">
 
+    <!-- ── ADMIN VIEW ── -->
+    <AdminView v-if="showAdmin" @back="showAdmin = false" />
+
+    <template v-else>
     <!-- ── LOADING ── -->
     <div v-if="loading" class="min-h-screen flex items-center justify-center">
       <div class="text-center">
@@ -37,13 +41,13 @@
     </div>
 
     <!-- ── PERSON SELECT VIEW ── -->
-    <div v-else-if="!selectedPerson" class="min-h-screen flex items-center justify-center px-4">
+    <div v-else-if="!evaluatedPerson" class="min-h-screen flex items-center justify-center px-4">
       <div class="bg-white rounded-2xl shadow-md overflow-hidden w-full max-w-md">
         <div class="bg-[#4b05ff] text-white px-6 py-6">
           <div class="flex items-center justify-between">
             <div>
               <h1 class="text-xl font-bold">Оцінка компетенцій</h1>
-              <p class="text-blue-200 text-sm mt-1">Оберіть співробітника для оцінювання</p>
+              <p class="text-blue-200 text-sm mt-1">Налаштуйте оцінювання</p>
             </div>
             <button
               class="text-blue-300 hover:text-white text-xs underline transition-colors"
@@ -56,25 +60,58 @@
             {{ user.email }}
           </p>
         </div>
-        <div class="px-6 py-6">
-          <p v-if="personError" class="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+        <div class="px-6 py-6 flex flex-col gap-5">
+          <p v-if="personError" class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
             {{ personError }}
           </p>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Співробітник</label>
-          <select
-            v-model="pendingPerson"
-            :disabled="loadingPersons"
-            class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 focus:outline-none focus:border-[#4b05ff] transition-colors appearance-none bg-white disabled:opacity-50"
-          >
-            <option :value="null" disabled>
-              {{ loadingPersons ? 'Завантаження…' : availablePersons.length === 0 ? 'Всі співробітники вже оцінені' : '— Оберіть зі списку —' }}
-            </option>
-            <option v-for="p in availablePersons" :key="p.id" :value="p">{{ p.name }}</option>
-          </select>
+
+          <!-- Select 1: who am I -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Хто я?</label>
+            <p class="text-xs text-gray-400 mb-2">Оберіть один раз — буде збережено до вашого акаунту</p>
+            <select
+              v-model="pendingMyPerson"
+              :disabled="loadingPersons || myPersonLocked"
+              class="w-full border-2 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 focus:outline-none transition-colors appearance-none"
+              :class="myPersonLocked
+                ? 'border-gray-100 bg-gray-50 text-gray-500 cursor-not-allowed'
+                : 'border-gray-200 bg-white focus:border-[#4b05ff]'"
+            >
+              <option :value="null" disabled>
+                {{ loadingPersons ? 'Завантаження…' : '— Оберіть зі списку —' }}
+              </option>
+              <option v-for="p in identityPersons" :key="p.id" :value="p">{{ p.name }}</option>
+            </select>
+            <p v-if="myPersonLocked" class="mt-1.5 text-xs text-green-600 flex items-center gap-1">
+              <i class="pi pi-lock text-xs" /> Збережено
+            </p>
+          </div>
+
+          <!-- Select 2: who am I evaluating -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Кого оцінюю?</label>
+            <p class="text-xs text-gray-400 mb-2">Обирайте щоразу перед початком оцінювання</p>
+            <select
+              v-model="pendingEvaluatedPerson"
+              :disabled="loadingPersons || !pendingMyPerson"
+              class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-700 focus:outline-none focus:border-[#4b05ff] transition-colors appearance-none bg-white disabled:opacity-50"
+            >
+              <option :value="null" disabled>
+                {{ loadingPersons ? 'Завантаження…' : '— Оберіть зі списку —' }}
+              </option>
+              <option
+                v-for="p in allowedEvaluationPersons"
+                :key="p.id"
+                :value="p"
+                :disabled="alreadyEvaluated.includes(p.id)"
+              >{{ p.name }}{{ alreadyEvaluated.includes(p.id) ? ' — вже оцінено' : '' }}</option>
+            </select>
+          </div>
+
           <button
-            :disabled="!pendingPerson || claimingPerson"
-            class="mt-5 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-colors"
-            :class="pendingPerson && !claimingPerson
+            :disabled="!canStart || claimingPerson"
+            class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-colors"
+            :class="canStart && !claimingPerson
               ? 'bg-[#4b05ff] text-white hover:bg-[#3a04cc]'
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
             @click="claimAndStart"
@@ -85,12 +122,21 @@
               <i class="pi pi-arrow-right text-xs" />
             </template>
           </button>
+
+          <button
+            v-if="isAdmin"
+            class="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 border-[#4b05ff] text-[#4b05ff] font-semibold text-sm hover:bg-[#4b05ff] hover:text-white transition-colors"
+            @click="showAdmin = true"
+          >
+            <i class="pi pi-chart-bar text-xs" />
+            Переглянути результати
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ── QUIZ VIEW ── -->
-    <div v-else-if="!showResults" class="min-h-screen flex flex-col">
+    <div v-else-if="evaluatedPerson && !showResults" class="min-h-screen flex flex-col">
 
       <!-- Header -->
       <header class="bg-[#4b05ff] text-white px-6 py-4 shadow-lg sticky top-0 z-10">
@@ -98,7 +144,7 @@
           <div class="flex items-center justify-between mb-2">
             <div>
               <h1 class="text-base font-bold tracking-wide uppercase opacity-80">Оцінка компетенцій</h1>
-              <p class="text-xs text-blue-300 mt-0.5">{{ selectedPerson.name }}</p>
+              <p class="text-xs text-blue-300 mt-0.5">{{ evaluatedPerson.name }}</p>
             </div>
             <span class="text-sm font-semibold bg-white/10 px-3 py-1 rounded-full">
               {{ currentIndex + 1 }} / {{ questions.length }}
@@ -118,7 +164,7 @@
         <div class="w-full max-w-3xl flex flex-col gap-4">
 
           <!-- Card -->
-          <Transition name="slide" mode="out-in">
+          <Transition name="slide" mode="out-in" @after-enter="focusInput">
             <div :key="current.id" class="bg-white rounded-2xl shadow-md overflow-hidden">
 
               <!-- Card title -->
@@ -167,8 +213,9 @@
                 <label class="block text-sm font-semibold text-gray-700 mb-3">
                   Введіть оцінку
                 </label>
-                <div class="flex flex-wrap items-start gap-4">
+                <div class="flex flex-wrap items-start gap-4" @keydown.enter.prevent="handleEnter">
                   <InputNumber
+                    ref="inputRef"
                     v-model="currentAnswer"
                     :min="current.min"
                     :max="current.max"
@@ -244,9 +291,17 @@
         <div class="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <h1 class="text-xl font-bold">Результати оцінки</h1>
-            <p class="text-blue-200 text-sm mt-0.5">{{ selectedPerson?.name }} · {{ questions.length }} компетенцій</p>
+            <p class="text-blue-200 text-sm mt-0.5">{{ evaluatedPerson?.name }} · {{ questions.length }} компетенцій</p>
           </div>
           <div class="flex gap-3">
+            <button
+              v-if="isAdmin"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/20 transition-colors"
+              @click="showAdmin = true"
+            >
+              <i class="pi pi-chart-bar text-xs" />
+              Всі результати
+            </button>
             <button
               class="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/40 text-white text-sm font-medium hover:bg-white/10 transition-colors"
               @click="printResults"
@@ -256,6 +311,13 @@
             </button>
             <button
               class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm font-medium hover:bg-white/20 transition-colors"
+              @click="newEvaluation"
+            >
+              <i class="pi pi-refresh text-xs" />
+              Нове оцінювання
+            </button>
+            <button
+              class="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/40 text-white text-sm font-medium hover:bg-white/10 transition-colors"
               @click="logout"
             >
               <i class="pi pi-sign-out text-xs" />
@@ -317,63 +379,209 @@
       </main>
     </div>
 
+    </template><!-- end v-else (not admin) -->
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { questions } from './questions.js'
 import { supabase } from './supabase.js'
+import AdminView from './AdminView.vue'
 
-// ── Auth state ──
+// ── Auth ──
 const user = ref(null)
 const loading = ref(true)
 const authError = ref(null)
 
-// ── Persons state ──
+// ── Persons ──
 const allPersons = ref([])
 const loadingPersons = ref(false)
-const selectedPerson = ref(null)
-const pendingPerson = ref(null)
-const claimingPerson = ref(false)
 const personError = ref(null)
 
-// ── Quiz state ──
+// Select 1: who am I (locked after first save)
+const myPerson = ref(null)       // saved in DB
+const myPersonLocked = ref(false)
+const pendingMyPerson = ref(null)
+
+// Select 2: who am I evaluating (always free)
+const pendingEvaluatedPerson = ref(null)
+const evaluatedPerson = ref(null)
+
+const claimingPerson = ref(false)
+const showAdmin = ref(false)
+const alreadyEvaluated = ref([]) // evaluated_person_ids already submitted by this user
+
+const isAdmin = computed(() => [1, 6, 7].includes(myPerson.value?.id))
+
+// Who this user is allowed to evaluate based on their person id
+const FULL_ACCESS = [1, 5, 6, 7]   // can evaluate everyone
+const LIMITED_CAN_EVAL = [1, 5]     // persons 2,3,4 can only eval these + themselves
+
+const allowedEvaluationPersons = computed(() => {
+  const myId = pendingMyPerson.value?.id
+  if (!myId) return []
+  if (FULL_ACCESS.includes(myId)) return allPersons.value
+  return allPersons.value.filter(p => LIMITED_CAN_EVAL.includes(p.id) || p.id === myId)
+})
+
+// Only unclaimed + my own person for identity select
+const identityPersons = computed(() =>
+  allPersons.value.filter(p => !p.is_verified || p.user_id === user.value?.id)
+)
+
+const canStart = computed(() =>
+  pendingMyPerson.value !== null && pendingEvaluatedPerson.value !== null
+)
+
+// ── Quiz ──
+const inputRef = ref(null)
+const QUIZ_DRAFT_STORAGE_KEY = 'quiz:draft:v1'
+const isRestoringDraft = ref(false)
+
+function getDraftStorageKey() {
+  if (!user.value?.id) return null
+  return `${QUIZ_DRAFT_STORAGE_KEY}:${user.value.id}`
+}
+
+function clearQuizDraft() {
+  const key = getDraftStorageKey()
+  if (key) localStorage.removeItem(key)
+}
+
+function saveQuizDraft() {
+  if (isRestoringDraft.value || !evaluatedPerson.value || showResults.value) return
+
+  const key = getDraftStorageKey()
+  if (!key) return
+
+  const safeAnswers = Array.from({ length: questions.length }, (_, i) => {
+    const val = answers.value[i]
+    return typeof val === 'number' ? val : null
+  })
+
+  const draft = {
+    evaluatedPersonId: evaluatedPerson.value.id,
+    answers: safeAnswers,
+    currentIndex: Math.max(0, Math.min(questions.length - 1, currentIndex.value)),
+  }
+
+  localStorage.setItem(key, JSON.stringify(draft))
+}
+
+function restoreQuizDraft() {
+  const key = getDraftStorageKey()
+  if (!key || !allPersons.value.length) return
+
+  const raw = localStorage.getItem(key)
+  if (!raw) return
+
+  let draft
+  try {
+    draft = JSON.parse(raw)
+  } catch {
+    localStorage.removeItem(key)
+    return
+  }
+
+  const personId = Number(draft?.evaluatedPersonId)
+  const restoredPerson = allPersons.value.find(p => p.id === personId)
+  if (!restoredPerson) {
+    localStorage.removeItem(key)
+    return
+  }
+
+  const restoredAnswers = Array.from({ length: questions.length }, (_, i) => {
+    const val = Array.isArray(draft?.answers) ? draft.answers[i] : null
+    return typeof val === 'number' ? val : null
+  })
+
+  const lastAnsweredIndex = restoredAnswers.reduce((last, val, i) =>
+    (val === null || val === undefined ? last : i), -1
+  )
+
+  isRestoringDraft.value = true
+  pendingEvaluatedPerson.value = restoredPerson
+  evaluatedPerson.value = restoredPerson
+  answers.value = restoredAnswers
+  currentIndex.value = lastAnsweredIndex >= 0 ? lastAnsweredIndex : 0
+
+  nextTick(() => {
+    isRestoringDraft.value = false
+    focusInput()
+  })
+}
+
+function focusInput() {
+  nextTick(() => {
+    let tries = 0
+
+    const tryFocus = () => {
+      const input = inputRef.value?.$el?.querySelector('input')
+      if (input) {
+        input.focus()
+        return
+      }
+
+      if (tries < 12) {
+        tries += 1
+        requestAnimationFrame(tryFocus)
+      }
+    }
+
+    tryFocus()
+  })
+}
+
 const currentIndex = ref(0)
 const answers = ref(Array(questions.length).fill(null))
 const showResults = ref(false)
-
-// ── Derived ──
-const availablePersons = computed(() =>
-  allPersons.value.filter(p => !p.is_verified)
-)
 
 // ── Init ──
 onMounted(async () => {
   const { data: { session } } = await supabase.auth.getSession()
   user.value = session?.user ?? null
   loading.value = false
-
-  if (user.value) await loadPersons()
+  if (user.value) {
+    await loadPersons()
+    restoreQuizDraft()
+  }
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
     user.value = session?.user ?? null
-    if (user.value) await loadPersons()
+    if (user.value) {
+      await loadPersons()
+      restoreQuizDraft()
+    }
+    else resetState()
   })
 })
 
 async function loadPersons() {
   loadingPersons.value = true
-  const { data, error } = await supabase
-    .from('persons')
-    .select('*')
-    .order('id')
+  const [personsRes, resultsRes] = await Promise.all([
+    supabase.from('persons').select('*').order('id'),
+    supabase.from('quiz_results').select('evaluated_person_id').eq('user_id', user.value.id),
+  ])
   loadingPersons.value = false
-  if (error) { personError.value = error.message; return }
-  allPersons.value = data
+
+  if (personsRes.error) { personError.value = personsRes.error.message; return }
+  allPersons.value = personsRes.data
+
+  if (!resultsRes.error) {
+    alreadyEvaluated.value = resultsRes.data.map(r => r.evaluated_person_id)
+  }
+
+  // Check if this user already claimed an identity
+  const mine = personsRes.data.find(p => p.user_id === user.value?.id)
+  if (mine) {
+    myPerson.value = mine
+    myPersonLocked.value = true
+    pendingMyPerson.value = mine
+  }
 }
 
-// ── Auth actions ──
+// ── Auth ──
 async function loginWithGoogle() {
   authError.value = null
   const { error } = await supabase.auth.signInWithOAuth({
@@ -385,36 +593,52 @@ async function loginWithGoogle() {
 
 async function logout() {
   await supabase.auth.signOut()
-  selectedPerson.value = null
-  pendingPerson.value = null
+  resetState()
+}
+
+function resetState() {
+  clearQuizDraft()
+  evaluatedPerson.value = null
+  pendingEvaluatedPerson.value = null
+  myPerson.value = null
+  myPersonLocked.value = false
+  pendingMyPerson.value = null
   currentIndex.value = 0
   answers.value = Array(questions.length).fill(null)
   showResults.value = false
   allPersons.value = []
+  alreadyEvaluated.value = []
 }
 
-// ── Person claim ──
+// ── Claim identity + start ──
 async function claimAndStart() {
-  if (!pendingPerson.value) return
+  if (!canStart.value) return
   claimingPerson.value = true
   personError.value = null
 
-  const { error } = await supabase
-    .from('persons')
-    .update({ user_id: user.value.id, is_verified: true })
-    .eq('id', pendingPerson.value.id)
-    .is('user_id', null)
+  // Only update DB if identity not yet locked
+  if (!myPersonLocked.value) {
+    const { error } = await supabase
+      .from('persons')
+      .update({ user_id: user.value.id, is_verified: true })
+      .eq('id', pendingMyPerson.value.id)
+      .is('user_id', null)
 
-  claimingPerson.value = false
+    if (error) {
+      personError.value = 'Цей профіль вже зайнятий. Оберіть інший.'
+      await loadPersons()
+      pendingMyPerson.value = null
+      claimingPerson.value = false
+      return
+    }
 
-  if (error) {
-    personError.value = 'Не вдалося закріпити співробітника. Спробуйте обрати іншого.'
+    myPerson.value = pendingMyPerson.value
+    myPersonLocked.value = true
     await loadPersons()
-    pendingPerson.value = null
-    return
   }
 
-  selectedPerson.value = pendingPerson.value
+  claimingPerson.value = false
+  evaluatedPerson.value = pendingEvaluatedPerson.value
 }
 
 // ── Quiz logic ──
@@ -423,10 +647,23 @@ const progress = computed(() => ((currentIndex.value + 1) / questions.length) * 
 
 const currentAnswer = computed({
   get: () => answers.value[currentIndex.value],
-  set: (val) => { answers.value[currentIndex.value] = val },
+  set: (val) => {
+    if (val === null || val === undefined || val === '') {
+      answers.value[currentIndex.value] = null
+      return
+    }
+
+    const num = Number(val)
+    if (Number.isNaN(num)) return
+
+    const clamped = Math.max(current.value.min, Math.min(current.value.max, num))
+    answers.value[currentIndex.value] = clamped
+  },
 })
 
-const isAnswered = computed(() => currentAnswer.value !== null && currentAnswer.value !== undefined)
+const isAnswered = computed(() =>
+  currentAnswer.value !== null && currentAnswer.value !== undefined
+)
 
 function getLevelForValue(question, val) {
   if (val === null || val === undefined) return null
@@ -441,10 +678,43 @@ function isHighlighted(answer) {
 
 const highlightedLevel = computed(() => getLevelForValue(current.value, currentAnswer.value))
 
+watch(currentIndex, focusInput)
+watch(evaluatedPerson, (val) => { if (val) focusInput() })
+watch([answers, currentIndex, evaluatedPerson, showResults], saveQuizDraft, { deep: true })
+
 function next() { if (currentIndex.value < questions.length - 1) currentIndex.value++ }
 function prev() { if (currentIndex.value > 0) currentIndex.value-- }
-function finish() { showResults.value = true }
+
+function handleEnter() {
+  if (!isAnswered.value) return
+  if (currentIndex.value < questions.length - 1) next()
+  else finish()
+}
+
+async function finish() {
+
+  const payload = {
+    user_id: user.value.id,
+    evaluator_person_id: myPerson.value.id,
+    evaluated_person_id: evaluatedPerson.value.id,
+    answers: questions.map((q, i) => ({ question_id: q.id, score: answers.value[i] })),
+  }
+  const { error } = await supabase.from('quiz_results').insert(payload)
+  if (error) return
+  clearQuizDraft()
+  showResults.value = true
+}
 function printResults() { window.print() }
+
+// After results, go back to select screen (keep identity, reset quiz)
+async function newEvaluation() {
+  evaluatedPerson.value = null
+  pendingEvaluatedPerson.value = null
+  currentIndex.value = 0
+  answers.value = Array(questions.length).fill(null)
+  showResults.value = false
+  await loadPersons() // refresh already-evaluated list
+}
 
 function truncate(text, len) {
   if (!text) return ''
