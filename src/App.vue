@@ -238,56 +238,56 @@
                     </div>
                   </Transition>
                 </div>
+
+                <!-- Navigation -->
+                <div class="flex justify-between items-center mt-5 pt-5 border-t border-gray-200">
+                  <button
+                    v-if="currentIndex > 0"
+                    class="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-[#4b05ff] text-[#4b05ff] font-semibold text-sm hover:bg-[#4b05ff] hover:text-white transition-colors"
+                    @click="prev"
+                  >
+                    <i class="pi pi-arrow-left text-xs" />
+                    Назад
+                  </button>
+                  <div v-else />
+
+                  <button
+                    v-if="currentIndex < questions.length - 1"
+                    :disabled="!isAnswered"
+                    class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                    :class="isAnswered
+                      ? 'bg-[#4b05ff] text-white hover:bg-[#254d7a]'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                    @click="next"
+                  >
+                    Далі
+                    <i class="pi pi-arrow-right text-xs" />
+                  </button>
+                  <button
+                    v-else
+                    :disabled="!isAnswered"
+                    class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                    :class="isAnswered
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                    @click="finish"
+                  >
+                    <i class="pi pi-check text-xs" />
+                    Завершити
+                  </button>
+                </div>
               </div>
             </div>
           </Transition>
-
-          <!-- Navigation -->
-          <div class="flex justify-between items-center">
-            <button
-              v-if="currentIndex > 0"
-              class="flex items-center gap-2 px-5 py-2.5 rounded-xl border-2 border-[#4b05ff] text-[#4b05ff] font-semibold text-sm hover:bg-[#4b05ff] hover:text-white transition-colors"
-              @click="prev"
-            >
-              <i class="pi pi-arrow-left text-xs" />
-              Назад
-            </button>
-            <div v-else />
-
-            <button
-              v-if="currentIndex < questions.length - 1"
-              :disabled="!isAnswered"
-              class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-              :class="isAnswered
-                ? 'bg-[#4b05ff] text-white hover:bg-[#254d7a]'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
-              @click="next"
-            >
-              Далі
-              <i class="pi pi-arrow-right text-xs" />
-            </button>
-            <button
-              v-else
-              :disabled="!isAnswered"
-              class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-              :class="isAnswered
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
-              @click="finish"
-            >
-              <i class="pi pi-check text-xs" />
-              Завершити
-            </button>
-          </div>
 
         </div>
       </main>
     </div>
 
     <!-- ── RESULTS VIEW ── -->
-    <div v-else class="min-h-screen flex flex-col">
+    <div v-else class="fixed inset-0 flex flex-col overflow-hidden bg-slate-100">
 
-      <header class="bg-[#4b05ff] text-white px-6 py-5 shadow-lg">
+      <header class="bg-[#4b05ff] text-white px-6 py-5 shadow-lg shrink-0">
         <div class="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <h1 class="text-xl font-bold">Результати оцінки</h1>
@@ -327,11 +327,11 @@
         </div>
       </header>
 
-      <main class="flex-1 px-4 py-6">
-        <div class="max-w-5xl mx-auto">
-          <div class="bg-white rounded-2xl shadow-md overflow-hidden">
+      <main class="flex-1 px-4 py-6 overflow-hidden min-h-0">
+        <div class="max-w-5xl mx-auto h-full">
+          <div class="bg-white rounded-2xl shadow-md overflow-auto h-full">
             <table class="w-full border-collapse">
-              <thead>
+              <thead class="sticky top-0 z-10">
                 <tr class="bg-[#4b05ff] text-white text-sm">
                   <th class="px-4 py-3 text-left font-semibold">#</th>
                   <th class="px-4 py-3 text-left font-semibold">Компетенція</th>
