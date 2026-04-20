@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent PrimeVue/Tailwind preflight conflicts */
+.p-inputnumber .p-inputtext {
+  @apply text-center text-xl font-bold text-[#4b05ff] w-20;
+}
+
+.p-inputnumber-button {
+  @apply bg-[#4b05ff] border-[#4b05ff];
+}
+
+.p-inputnumber-button .p-button-icon {
+  color: white !important;
+}
+
+.p-button.p-button-outlined.nav-btn {
+  @apply border-2;
+}
